@@ -9,6 +9,8 @@ import pytz
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+import logging
+import traceback
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -79,53 +81,58 @@ def get_available_badge():
 
 def save_photo(photo_data, identifier, folder_name='visitor_photos'):
     if not photo_data:
-        print("No photo data provided.")
+        logger.warning("No photo data provided.")
         return None
     
-    # Create uploads directory if it doesn't exist
-    upload_dir = os.path.join(app.static_folder, 'uploads')
-    if not os.path.exists(upload_dir):
-        os.makedirs(upload_dir)
-    
-    # Extract image data from base64 string
     try:
-        print(" Decoding Base64 image data....")
-
-        #exctract base64 data
-        if ',' in photo_data:
-            base64_data = photo_data.split(',')[1]
-        else:
-            base64_data = photo_data
+        logger.info("Processing photo data for upload")
         
-        print("Base64 data extracted. Decoding...")  # Debugging print
+        # Extract base64 data
+        try:
+            if ',' in photo_data:
+                base64_data = photo_data.split(',')[1]
+            else:
+                base64_data = photo_data
+            
+            logger.info("Base64 data extracted successfully")
+        except Exception as e:
+            logger.error(f"Error extracting base64 data: {str(e)}")
+            return None
         
-        image_data = base64.b64decode(base64_data)
-
-        #create url-friendly filename without spaces or special characters
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        #Replace spaces with underscores and remove special characters
-        safe_identifier = "".join(c for c in identifier if c.isalnum() or c in "_-").replace(" ", "_")
-        filename = f"{safe_identifier}_{timestamp}.jpg"
+        # Create URL-friendly filename
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            safe_identifier = "".join(c for c in identifier if c.isalnum() or c in "_-").replace(" ", "_")
+            filename = f"{safe_identifier}_{timestamp}.jpg"
+            logger.info(f"Created safe filename: {filename}")
+        except Exception as e:
+            logger.error(f"Error creating filename: {str(e)}")
+            filename = f"visitor_{timestamp}.jpg"
         
-        #upload image to cloudinary
-        upload_result = cloudinary.uploader.upload(
-            f"data:image/jpeg;base64,{base64_data}",
-            public_id = f"{folder_name}/{filename}",
-            folder = "visitor_app",
-            upload_preset="Royal-30days",
-            invalidate=True,
-            invalidate_after=2592000  # 30 days in seconds
-        )
-        
-        print(f"Image uploaded to Cloudinary: {upload_result['secure_url']}")
-
-        #return the Cloudinary URL
-        return upload_result['secure_url']
-    
-
-    
+        # Upload to Cloudinary with detailed error handling
+        try:
+            logger.info("Uploading to Cloudinary...")
+            upload_result = cloudinary.uploader.upload(
+                f"data:image/jpeg;base64,{base64_data}",
+                public_id=f"{folder_name}/{filename}",
+                folder="visitor_app",
+                upload_preset="Royal-30days",
+                invalidate=True,
+                invalidate_after=2592000  # 30 days in seconds
+            )
+            logger.info(f"Successfully uploaded to Cloudinary with URL: {upload_result['secure_url'][:30]}...")
+            return upload_result['secure_url']
+        except Exception as e:
+            logger.error(f"Cloudinary upload error: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Try to get more details from Cloudinary error
+            if hasattr(e, 'message'):
+                logger.error(f"Cloudinary error message: {e.message}")
+            return None
+            
     except Exception as e:
-        print(f"Error saving photo: {e}")
+        logger.error(f"Unexpected error in save_photo: {str(e)}")
+        logger.error(traceback.format_exc())
         return None
 
 
@@ -223,92 +230,129 @@ def get_personnel():
     print(f"Returning {len(personnel_list)} personnel for {department}")
     return jsonify(personnel_list)
 
-# Visitor Check-In Route
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# Visitor Check-In Route with improved error handling
 @app.route("/", methods=["GET", "POST"])
 def visitor():
-   # if not session.get("ipad_authenticated"):  # If not logged in, redirect to login page
-        #return redirect(url_for("visitor"))
-
-    if request.method == "POST":
-        visitor_name = request.form.get("visitor_name")
-        company_name = request.form.get("company_name")
-        purpose = request.form.get("purpose")
-        department_name = request.form.get("department")  # Directly from the form
-        point_of_contact_email = request.form.get("personnel")  # This now contains the selected email
-        photo_data = request.form.get("photo_data")
-
-        # Handle photo upload
-        #photo_path = None
-        #if photo and allowed_file(photo.filename):
-            #filename = secure_filename(photo.filename)
-            #photo_path = filename  # Store only 'filename.jpg'
-            #full_photo_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)  # Full path for saving the file
-            #photo.save(full_photo_path)
-
-         # 🔥 Assign an available badge
-        badge_number = get_available_badge()
-        if badge_number is None:
-            flash("No visitor badges available. Please wait for one to be returned.", "danger")
+    try:
+        if not session.get("ipad_authenticated"):  # If not logged in, redirect to login page
+            logger.info("User not authenticated, redirecting to login")
             return redirect(url_for("visitor"))
-        
-          # Save photos if provided
-        photo_path = None
-        #plate_photo_path = None
 
-        if photo_data:
-            print("📌 Calling save_photo() for driver's license...")
-            photo_path = save_photo(photo_data, visitor_name, "visitor_photos")
-            if photo_path:
-                print(f"✅ Driver's License Photo saved at: {photo_path}\n")
-            else:
-                print("❌ Failed to save driver's license photo\n")
+        if request.method == "POST":
+            try:
+                # Log the start of form submission
+                logger.info("Form submission started")
+                
+                # Get form data with validation
+                visitor_name = request.form.get("visitor_name")
+                company_name = request.form.get("company_name")
+                purpose = request.form.get("purpose")
+                department_name = request.form.get("department")
+                point_of_contact_email = request.form.get("personnel")
+                photo_data = request.form.get("photo_data")
+                
+                # Log received data (without sensitive info)
+                logger.info(f"Received form data: name={visitor_name}, company={company_name}, dept={department_name}")
+                logger.info(f"Photo data received: {'Yes' if photo_data else 'No'}")
+                
+                # Process photo with error handling
+                photo_path = None
+                if photo_data:
+                    try:
+                        logger.info("Processing photo data")
+                        photo_path = save_photo(photo_data, visitor_name)
+                        logger.info(f"Photo saved successfully: {photo_path[:50]}...")
+                    except Exception as e:
+                        logger.error(f"Error saving photo: {str(e)}")
+                        logger.error(traceback.format_exc())
+                        # Continue without photo rather than failing
+                        flash("Could not save photo, but continuing with visitor check-in.", "warning")
+                
+                # Assign badge with error handling
+                try:
+                    badge_number = get_available_badge()
+                    if badge_number is None:
+                        logger.warning("No badges available")
+                        flash("No visitor badges available. Please wait for one to be returned.", "danger")
+                        return redirect(url_for("visitor"))
+                    logger.info(f"Assigned badge number: {badge_number}")
+                except Exception as e:
+                    logger.error(f"Error assigning badge: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    badge_number = None
+                    flash("Could not assign a badge. Please try again later.", "danger")
+                    return redirect(url_for("visitor"))
+                
+                # Save visitor to database with error handling
+                try:
+                    visitor = Visitor(
+                        name=visitor_name,
+                        company_name=company_name,
+                        purpose=purpose,
+                        department=department_name,
+                        personnel=point_of_contact_email,
+                        photo_path=photo_path,
+                        badge_number=badge_number,
+                        check_in_time=datetime.now(pytz.utc).astimezone(LOCAL_TZ).replace(microsecond=0),
+                        check_out_time=None
+                    )
+                    db.session.add(visitor)
+                    db.session.commit()
+                    logger.info(f"Visitor saved to database with ID: {visitor.id}")
+                except Exception as e:
+                    logger.error(f"Error saving to database: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    db.session.rollback()
+                    flash("Database error occurred. Please try again.", "danger")
+                    return redirect(url_for("visitor"))
+                
+                # Send email with error handling
+                try:
+                    logger.info(f"Sending email notification to {point_of_contact_email}")
+                    email_sent = send_email(
+                        recipient_email=point_of_contact_email,
+                        visitor_name=visitor_name,
+                        company_name=company_name,
+                        purpose=purpose,
+                        department=department_name
+                    )
+                    logger.info(f"Email sent status: {email_sent}")
+                    
+                    if email_sent:
+                        flash(f"Visitor {visitor_name} checked in successfully! Email notification sent to {point_of_contact_email}", "success")
+                        flash(f'<span class="badge-number">Assigned Visitor Badge: {badge_number}</span>', "success")
+                    else:
+                        flash(f"Visitor {visitor_name} checked in, but we couldn't notify {point_of_contact_email}. Please call them at their extension.", "warning")
+                        flash(f'<span class="badge-number">Assigned Visitor Badge: {badge_number}</span>', "success")
+                except Exception as e:
+                    logger.error(f"Error sending email: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    flash(f"Visitor {visitor_name} checked in, but there was an error sending the notification email.", "warning")
+                    flash(f'<span class="badge-number">Assigned Visitor Badge: {badge_number}</span>', "success")
+                
+                logger.info("Form submission completed successfully")
+                return redirect(url_for("visitor"))
+                
+            except Exception as e:
+                logger.error(f"Unhandled error in form submission: {str(e)}")
+                logger.error(traceback.format_exc())
+                flash("An unexpected error occurred. Please try again.", "danger")
+                return redirect(url_for("visitor"))
         
-          # 📌 Debugging: Print received data
-        print("\n📌 Received Form Data:")
-        print(f"Name: {visitor_name}")
-        print(f"Company Name: {company_name}")
-        print(f"Purpose: {purpose}")
-        print(f"Departmetn: {department_name}")
-        print(f"Point of contact: {point_of_contact_email}")
-        print(f"Photo Data (first 100 chars): {photo_data[:100] if photo_data else 'No photo received'}")
+        # GET request - show form
+        visitors = Visitor.query.filter(Visitor.check_out_time.is_(None)).all()
+        logger.info(f"Displaying visitor form with {len(visitors)} active visitors")
+        return render_template("visitor.html", visitors=visitors)
         
-
-        # Save visitor to database
-        visitor = Visitor(
-            name=visitor_name,
-            company_name=company_name,
-            purpose=purpose,
-            department=department_name,
-            personnel=point_of_contact_email,  # Save the email of the point of contact
-            photo_path=photo_path,
-            badge_number=badge_number,  # Store assigned badge
-            check_in_time=datetime.now(pytz.utc).astimezone(LOCAL_TZ).replace(microsecond=0),
-            check_out_time=None  # ✅ Ensure this is explicitly set to None
-        )
-        db.session.add(visitor)
-        db.session.commit()
-
-        # Send email notification
-        email_sent = send_email(
-        recipient_email=point_of_contact_email,  # Send the email to the selected contact
-        visitor_name=visitor_name,
-        company_name=company_name,
-        purpose=purpose,
-        department=department_name
-)
-        if email_sent:
-            flash(f"Visitor {visitor_name} checked in successfully! Email notification sent to {point_of_contact_email}", "success")
-            flash(f'<span class="badge-number">Assigned Visitor Badge: {badge_number}</span>', "success")
-        else:
-            flash(f"Visitor {visitor_name} checked in, but we couldn't notify {point_of_contact_email}. Please call them at their extension.", "warning")
-            flash(f'<span class="badge-number">Assigned Visitor Badge: {badge_number}</span>', "success")
-        
-        return redirect(url_for("visitor"))
-    
-    # Fetch only visitors that are still checked in
-    visitors = Visitor.query.filter(Visitor.check_out_time.is_(None)).all()
-
-    return render_template("visitor.html", visitors=visitors)
+    except Exception as e:
+        logger.error(f"Critical error in visitor route: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "An error occurred. Please contact support.", 500
 
 @app.route("/visitor_checkout/<int:visitor_id>", methods=["POST"])
 def visitor_checkout(visitor_id):
