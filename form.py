@@ -18,9 +18,18 @@ ADMIN_PASSWORD = "royal25"
 
 LOCAL_TZ = pytz.timezone("America/Chicago")
 
-# Configure database
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///visitors.db"  # Database file
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+#configure Database
+#use Heroku's database_url if available, otherwise use SQLite
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///visitors.db')
+
+# Heroku's PostgreSQL URL starts with 'postgres://', but SQLAlchemy expects 'postgresql://'
+if database_url and database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 db = SQLAlchemy(app)
 
 # Configure upload folders
