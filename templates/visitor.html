@@ -111,27 +111,20 @@
 
 
 <script>
-// Add this to your existing script section in visitor.html
 document.addEventListener("DOMContentLoaded", function() {
-    console.log("DOM fully loaded - initializing visitor form");
+    console.log("DOM loaded - initializing photo capture functionality");
     
     // Get all necessary elements
-    const departmentSelect = document.getElementById("department");
-    const personnelSelect = document.getElementById("personnel");
     const photoButton = document.getElementById("photo-button");
+    const photoDataInput = document.getElementById("photo-data");
+    const photoPreview = document.getElementById("photo-preview");
+    const previewImage = document.getElementById("preview-image");
+    const retakePhotoBtn = document.getElementById("retake-photo-btn");
+    const cameraIcon = document.getElementById("camera-icon");
+    const submitButton = document.getElementById("submit-button");
     const visitorForm = document.getElementById("visitor-form");
     
-    // Create hidden photo data input if not exists
-    let photoDataInput = document.getElementById("photo-data");
-    if (!photoDataInput) {
-        photoDataInput = document.createElement("input");
-        photoDataInput.type = "hidden";
-        photoDataInput.id = "photo-data";
-        photoDataInput.name = "photo_data";
-        visitorForm.appendChild(photoDataInput);
-    }
-    
-    // Create popup elements if they don't exist
+    // Create confirmation popup if it doesn't exist
     let popup = document.getElementById("confirmation-popup");
     if (!popup) {
         popup = document.createElement("div");
@@ -167,198 +160,110 @@ document.addEventListener("DOMContentLoaded", function() {
     const confirmButton = document.getElementById("confirm-button");
     const retakeButton = document.getElementById("retake-button");
     
-    // Create submit button if it doesn't exist
-    let submitButton = document.getElementById("submit-button");
-    if (!submitButton) {
-        submitButton = document.createElement("button");
-        submitButton.id = "submit-button";
-        submitButton.type = "submit";
-        submitButton.innerText = "Submit Visitor Information";
-        submitButton.style.cssText = `
-            display: none;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        `;
-        visitorForm.appendChild(submitButton);
-    } else {
-        submitButton.style.display = "none";
-    }
+    // Create a hidden file input for photo capture
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.capture = "camera"; // This tells the browser to prefer using the camera
+    fileInput.style.display = "none";
+    document.body.appendChild(fileInput);
     
-    // Department change handler
-    departmentSelect.addEventListener("change", function() {
-        const selectedDepartment = this.value;
-        console.log("Department changed to:", selectedDepartment);
-        
-        // Clear current options in personnel select
-        personnelSelect.innerHTML = '<option value="" disabled selected>Select a person</option>';
-        
-        // If a department is selected, fetch personnel for that department
-        if (selectedDepartment) {
-            console.log("Fetching personnel for department:", selectedDepartment);
-            fetch(`/get_personnel?department=${selectedDepartment}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log("Personnel data received:", data);
-                    // Add new options based on the response
-                    if (data && data.length > 0) {
-                        data.forEach(person => {
-                            const option = document.createElement("option");
-                            option.value = person.email;
-                            option.textContent = person.name;
-                            personnelSelect.appendChild(option);
-                        });
-                        console.log("Added personnel options:", data.length);
-                    } else {
-                        console.log("No personnel data found for department");
-                    }
-                })
-                .catch(error => console.error("Error fetching personnel:", error));
-        }
-    });
-    
-    // Photo button handler
+    // Photo button handler - use simple file input approach
     photoButton.addEventListener("click", function() {
         console.log("Photo button clicked");
-        
-        // Check if the MediaDevices API is supported
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            console.log("MediaDevices API supported");
+        fileInput.click();
+    });
+    
+    // Handle file selection
+    fileInput.addEventListener("change", function() {
+        const file = this.files[0];
+        if (file) {
+            console.log("Photo file selected:", file.name);
+            const reader = new FileReader();
             
-            // Create video and canvas elements for capturing
-            const videoElement = document.createElement("video");
-            videoElement.autoplay = true;
-            videoElement.style.display = "none";
-            document.body.appendChild(videoElement);
+            reader.onload = function(e) {
+                const imageData = e.target.result;
+                console.log("Image loaded, showing preview");
+                
+                // Show preview in confirmation popup
+                popupPhotoPreview.src = imageData;
+                photoDataInput.value = imageData;
+                popup.style.display = "block";
+            };
             
-            const canvasElement = document.createElement("canvas");
-            canvasElement.style.display = "none";
-            document.body.appendChild(canvasElement);
-            
-            // Access camera
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-                .then(stream => {
-                    console.log("Camera access granted");
-                    videoElement.srcObject = stream;
-                    
-                    // Create snapshot UI
-                    const snapshotDiv = document.createElement("div");
-                    snapshotDiv.style.cssText = `
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background-color: rgba(0,0,0,0.8);
-                        z-index: 1000;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                    `;
-                    
-                    const previewVideo = document.createElement("video");
-                    previewVideo.autoplay = true;
-                    previewVideo.srcObject = stream;
-                    previewVideo.style.cssText = "width: 80%; max-height: 60vh; object-fit: contain;";
-                    
-                    const takePhotoBtn = document.createElement("button");
-                    takePhotoBtn.textContent = "Take Photo";
-                    takePhotoBtn.style.cssText = "margin-top: 20px; padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 4px;";
-                    
-                    const cancelBtn = document.createElement("button");
-                    cancelBtn.textContent = "Cancel";
-                    cancelBtn.style.cssText = "margin-top: 10px; padding: 10px 20px; background-color: #f44336; color: white; border: none; border-radius: 4px;";
-                    
-                    snapshotDiv.appendChild(previewVideo);
-                    snapshotDiv.appendChild(takePhotoBtn);
-                    snapshotDiv.appendChild(cancelBtn);
-                    document.body.appendChild(snapshotDiv);
-                    
-                    // Event listener to take a photo
-                    takePhotoBtn.addEventListener("click", () => {
-                        console.log("Take photo button clicked");
-                        
-                        // Set canvas dimensions
-                        const width = previewVideo.videoWidth;
-                        const height = previewVideo.videoHeight;
-                        canvasElement.width = width;
-                        canvasElement.height = height;
-                        
-                        // Capture the photo from video stream
-                        const context = canvasElement.getContext("2d");
-                        context.drawImage(previewVideo, 0, 0, width, height);
-                        
-                        // Convert to Base64 format
-                        let imageData = canvasElement.toDataURL("image/jpeg");
-                        
-                        // Show preview in confirmation popup
-                        popupPhotoPreview.src = imageData;
-                        photoDataInput.value = imageData;
-                        popup.style.display = "block";
-                        
-                        // Cleanup: Stop video stream and remove UI elements
-                        stream.getTracks().forEach(track => track.stop());
-                        document.body.removeChild(snapshotDiv);
-                        document.body.removeChild(videoElement);
-                        document.body.removeChild(canvasElement);
-                    });
-                    
-                    // Cancel button event listener
-                    cancelBtn.addEventListener("click", () => {
-                        console.log("Cancel button clicked");
-                        stream.getTracks().forEach(track => track.stop());
-                        document.body.removeChild(snapshotDiv);
-                        document.body.removeChild(videoElement);
-                        document.body.removeChild(canvasElement);
-                    });
-                })
-                .catch(error => {
-                    console.error("Error accessing camera:", error);
-                    // Fallback to file input if camera access fails
-                    const input = document.createElement("input");
-                    input.type = "file";
-                    input.accept = "image/*";
-                    
-                    input.addEventListener("change", () => {
-                        const file = input.files[0];
-                        if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (e) => {
-                                popupPhotoPreview.src = e.target.result;
-                                photoDataInput.value = e.target.result;
-                                popup.style.display = "block";
-                            };
-                            reader.readAsDataURL(file);
-                        }
-                    });
-                    
-                    input.click();
-                });
-        } else {
-            console.log("MediaDevices API not supported");
-            alert("Camera access is not supported on this device. Please use a different device or browser.");
+            reader.readAsDataURL(file);
         }
     });
     
     // Confirm Photo
-    confirmButton.addEventListener("click", () => {
-        console.log("Confirm button clicked");
+    confirmButton.addEventListener("click", function() {
+        console.log("Photo confirmed");
         popup.style.display = "none"; // Hide popup
-        submitButton.style.display = "block"; // Show submit button
+        
+        // Show the preview in the main UI
+        previewImage.src = photoDataInput.value;
+        photoPreview.style.display = "block";
+        
+        // If submit button exists, show it
+        if (submitButton) {
+            submitButton.style.display = "block";
+        }
     });
     
     // Retake Photo
-    retakeButton.addEventListener("click", () => {
-        console.log("Retake button clicked");
+    retakeButton.addEventListener("click", function() {
+        console.log("Retaking photo");
         popup.style.display = "none"; // Hide popup
         photoDataInput.value = ""; // Clear the hidden input
-        photoButton.click(); // Trigger photo capture again
+        fileInput.value = ""; // Clear the file input
+        fileInput.click(); // Reopen file selection
     });
+    
+    // Retake photo button in main UI
+    retakePhotoBtn.addEventListener("click", function() {
+        console.log("Retake button clicked from preview");
+        photoPreview.style.display = "none"; // Hide the preview
+        photoDataInput.value = ""; // Clear the data
+        fileInput.value = ""; // Clear the file input
+        fileInput.click(); // Reopen file selection
+    });
+    
+    // Department change handler (keeping this from your previous code)
+    const departmentSelect = document.getElementById("department");
+    const personnelSelect = document.getElementById("personnel");
+    
+    if (departmentSelect && personnelSelect) {
+        departmentSelect.addEventListener("change", function() {
+            const selectedDepartment = this.value;
+            console.log("Department changed to:", selectedDepartment);
+            
+            // Clear current options in personnel select
+            personnelSelect.innerHTML = '<option value="" disabled selected>Select a person</option>';
+            
+            // If a department is selected, fetch personnel for that department
+            if (selectedDepartment) {
+                console.log("Fetching personnel for department:", selectedDepartment);
+                fetch(`/get_personnel?department=${selectedDepartment}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Personnel data received:", data);
+                        // Add new options based on the response
+                        if (data && data.length > 0) {
+                            data.forEach(person => {
+                                const option = document.createElement("option");
+                                option.value = person.email;
+                                option.textContent = person.name;
+                                personnelSelect.appendChild(option);
+                            });
+                            console.log("Added personnel options:", data.length);
+                        } else {
+                            console.log("No personnel data found for department");
+                        }
+                    })
+                    .catch(error => console.error("Error fetching personnel:", error));
+            }
+        });
+    }
 });
 </script>
     </div>
