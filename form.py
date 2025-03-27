@@ -239,10 +239,6 @@ logger = logging.getLogger(__name__)
 @app.route("/", methods=["GET", "POST"])
 def visitor():
     try:
-        if not session.get("ipad_authenticated"):  # If not logged in, redirect to login page
-            logger.info("User not authenticated, redirecting to login")
-            return redirect(url_for("visitor"))
-
         if request.method == "POST":
             try:
                 # Log the start of form submission
