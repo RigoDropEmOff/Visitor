@@ -198,6 +198,28 @@ document.addEventListener("DOMContentLoaded", function() {
                     previewImage.src = compressedImageData;
                     photoDataInput.value = compressedImageData;
                     photoPreview.style.display = "block";
+                    
+                    // Create or show submit button
+                    let submitButton = document.getElementById("submit-button");
+                    if (!submitButton) {
+                        submitButton = document.createElement("button");
+                        submitButton.id = "submit-button";
+                        submitButton.type = "submit";
+                        submitButton.innerText = "Submit Visitor Information";
+                        submitButton.style.cssText = `
+                            display: block;
+                            margin-top: 20px;
+                            padding: 10px 20px;
+                            background-color: #4CAF50;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            cursor: pointer;
+                        `;
+                        form.appendChild(submitButton);
+                    } else {
+                        submitButton.style.display = "block";
+                    }
                 });
             };
             
@@ -285,6 +307,13 @@ document.addEventListener("DOMContentLoaded", function() {
             console.log("Retake button clicked");
             photoPreview.style.display = "none";
             photoDataInput.value = "";
+            
+            // Hide submit button
+            const submitButton = document.getElementById("submit-button");
+            if (submitButton) {
+                submitButton.style.display = "none";
+            }
+            
             fileInput.click();
         });
     }
