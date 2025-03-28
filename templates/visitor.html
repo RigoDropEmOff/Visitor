@@ -121,6 +121,52 @@ document.addEventListener("DOMContentLoaded", function() {
     const previewImage = document.getElementById("preview-image");
     const retakePhotoBtn = document.getElementById("retake-photo-btn");
     const form = document.getElementById("visitor-form");
+    const departmentSelect = document.getElementById("department");
+    const personnelSelect = document.getElementById("personnel");
+    
+    // Add personnel dropdown handler
+    if (departmentSelect && personnelSelect) {
+        console.log("Setting up department change handler");
+        departmentSelect.addEventListener("change", function() {
+            const selectedDepartment = this.value;
+            console.log("Department changed to:", selectedDepartment);
+            
+            // Clear current options in personnel select
+            personnelSelect.innerHTML = '<option value="" disabled selected>Select a person</option>';
+            console.log("Cleared personnel dropdown");
+            
+            // If a department is selected, fetch personnel for that department
+            if (selectedDepartment) {
+                console.log("Fetching personnel for department:", selectedDepartment);
+                fetch(`/get_personnel?department=${selectedDepartment}`)
+                    .then(response => {
+                        console.log("Response status:", response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("Personnel data received:", JSON.stringify(data));
+                        // Add new options based on the response
+                        if (data && data.length > 0) {
+                            data.forEach(person => {
+                                const option = document.createElement("option");
+                                option.value = person.email;
+                                option.textContent = person.name;
+                                personnelSelect.appendChild(option);
+                                console.log("Added option:", person.name, person.email);
+                            });
+                            console.log(`Added ${data.length} personnel options`);
+                        } else {
+                            console.log("No personnel data found for department");
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error fetching personnel:", error);
+                    });
+            }
+        });
+    } else {
+        console.error("Department or personnel select elements not found");
+    }
     
     // Create a hidden file input for photo capture
     const fileInput = document.createElement("input");
