@@ -19,6 +19,7 @@ app.secret_key = "your_secret_key_here"  # For flash messages
 
 ADMIN_PASSWORD = "royal25"
 
+os.environ['TZ'] = 'America/Chicago'
 LOCAL_TZ = pytz.timezone("America/Chicago")
 
 #configure Database
