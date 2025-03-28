@@ -11,6 +11,7 @@ import cloudinary.uploader
 import cloudinary.api
 import logging
 import traceback
+from werkzeug.exceptions import RequestEntityTooLarge
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -31,7 +32,7 @@ if database_url and database_url.startswith('postgres://'):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 #10 mb limit
 db = SQLAlchemy(app)
 
 # Configure upload folders
@@ -300,6 +301,10 @@ def visitor():
                     db.session.add(visitor)
                     db.session.commit()
                     logger.info(f"Visitor saved to database with ID: {visitor.id}")
+                except RequestEntityTooLarge:
+                # This will catch the specific error when the image is too large
+                    flash("The image is too large. Please take a smaller photo or use lower quality.", "danger")
+                    return redirect(url_for("visitor"))
                 except Exception as e:
                     logger.error(f"Error saving to database: {str(e)}")
                     logger.error(traceback.format_exc())

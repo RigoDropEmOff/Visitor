@@ -112,7 +112,7 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    console.log("DOM loaded - initializing photo capture functionality");
+    console.log("DOM loaded - initializing form with image compression");
     
     // Get all necessary elements
     const photoButton = document.getElementById("photo-button");
@@ -120,148 +120,126 @@ document.addEventListener("DOMContentLoaded", function() {
     const photoPreview = document.getElementById("photo-preview");
     const previewImage = document.getElementById("preview-image");
     const retakePhotoBtn = document.getElementById("retake-photo-btn");
-    const cameraIcon = document.getElementById("camera-icon");
-    const submitButton = document.getElementById("submit-button");
-    const visitorForm = document.getElementById("visitor-form");
-    
-    // Create confirmation popup if it doesn't exist
-    let popup = document.getElementById("confirmation-popup");
-    if (!popup) {
-        popup = document.createElement("div");
-        popup.id = "confirmation-popup";
-        popup.style.cssText = `
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1000;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-            width: 80%;
-            max-width: 500px;
-            text-align: center;
-        `;
-        
-        popup.innerHTML = `
-            <p>Does the photo look correct?</p>
-            <img id="popup-photo-preview" style="width: 100%; margin-top: 10px;" alt="Photo Preview">
-            <div style="margin-top: 15px;">
-                <button type="button" id="confirm-button" style="margin-right: 10px; padding: 8px 16px;">Yes</button>
-                <button type="button" id="retake-button" style="padding: 8px 16px;">Retake</button>
-            </div>
-        `;
-        document.body.appendChild(popup);
-    }
-    
-    const popupPhotoPreview = document.getElementById("popup-photo-preview");
-    const confirmButton = document.getElementById("confirm-button");
-    const retakeButton = document.getElementById("retake-button");
+    const form = document.getElementById("visitor-form");
     
     // Create a hidden file input for photo capture
     const fileInput = document.createElement("input");
     fileInput.type = "file";
     fileInput.accept = "image/*";
-    fileInput.capture = "camera"; // This tells the browser to prefer using the camera
     fileInput.style.display = "none";
     document.body.appendChild(fileInput);
     
-    // Photo button handler - use simple file input approach
+    // Photo button handler
     photoButton.addEventListener("click", function() {
         console.log("Photo button clicked");
         fileInput.click();
     });
     
-    // Handle file selection
+    // Handle file selection with compression
     fileInput.addEventListener("change", function() {
+        console.log("File selected");
         const file = this.files[0];
         if (file) {
-            console.log("Photo file selected:", file.name);
+            console.log("Processing file:", file.name, "Size:", file.size, "bytes");
             const reader = new FileReader();
             
             reader.onload = function(e) {
-                const imageData = e.target.result;
-                console.log("Image loaded, showing preview");
-                
-                // Show preview in confirmation popup
-                popupPhotoPreview.src = imageData;
-                photoDataInput.value = imageData;
-                popup.style.display = "block";
+                console.log("File loaded, compressing image...");
+                // Compress the image before storing it
+                compressImage(e.target.result, function(compressedImageData) {
+                    console.log("Original size:", e.target.result.length, "Compressed size:", compressedImageData.length);
+                    // Show preview
+                    previewImage.src = compressedImageData;
+                    photoDataInput.value = compressedImageData;
+                    photoPreview.style.display = "block";
+                });
             };
             
             reader.readAsDataURL(file);
         }
     });
     
-    // Confirm Photo
-    confirmButton.addEventListener("click", function() {
-        console.log("Photo confirmed");
-        popup.style.display = "none"; // Hide popup
-        
-        // Show the preview in the main UI
-        previewImage.src = photoDataInput.value;
-        photoPreview.style.display = "block";
-        
-        // If submit button exists, show it
-        if (submitButton) {
-            submitButton.style.display = "block";
-        }
-    });
-    
-    // Retake Photo
-    retakeButton.addEventListener("click", function() {
-        console.log("Retaking photo");
-        popup.style.display = "none"; // Hide popup
-        photoDataInput.value = ""; // Clear the hidden input
-        fileInput.value = ""; // Clear the file input
-        fileInput.click(); // Reopen file selection
-    });
-    
-    // Retake photo button in main UI
-    retakePhotoBtn.addEventListener("click", function() {
-        console.log("Retake button clicked from preview");
-        photoPreview.style.display = "none"; // Hide the preview
-        photoDataInput.value = ""; // Clear the data
-        fileInput.value = ""; // Clear the file input
-        fileInput.click(); // Reopen file selection
-    });
-    
-    // Department change handler (keeping this from your previous code)
-    const departmentSelect = document.getElementById("department");
-    const personnelSelect = document.getElementById("personnel");
-    
-    if (departmentSelect && personnelSelect) {
-        departmentSelect.addEventListener("change", function() {
-            const selectedDepartment = this.value;
-            console.log("Department changed to:", selectedDepartment);
+    // Image compression function
+    function compressImage(imageData, callback) {
+        console.log("Starting image compression");
+        const img = new Image();
+        img.onload = function() {
+            console.log("Image loaded for compression, original dimensions:", img.width, "x", img.height);
+            // Create canvas for compression
+            const canvas = document.createElement("canvas");
             
-            // Clear current options in personnel select
-            personnelSelect.innerHTML = '<option value="" disabled selected>Select a person</option>';
+            // Calculate new dimensions (max 600px width/height for older devices)
+            let width = img.width;
+            let height = img.height;
+            const maxSize = 600;
             
-            // If a department is selected, fetch personnel for that department
-            if (selectedDepartment) {
-                console.log("Fetching personnel for department:", selectedDepartment);
-                fetch(`/get_personnel?department=${selectedDepartment}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log("Personnel data received:", data);
-                        // Add new options based on the response
-                        if (data && data.length > 0) {
-                            data.forEach(person => {
-                                const option = document.createElement("option");
-                                option.value = person.email;
-                                option.textContent = person.name;
-                                personnelSelect.appendChild(option);
-                            });
-                            console.log("Added personnel options:", data.length);
-                        } else {
-                            console.log("No personnel data found for department");
-                        }
-                    })
-                    .catch(error => console.error("Error fetching personnel:", error));
+            if (width > height && width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+            } else if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
             }
+            
+            console.log("Resizing to:", width, "x", height);
+            
+            // Set canvas dimensions
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw resized image on canvas
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Get compressed image data (0.5 quality - more compression for this older device)
+            const compressedImageData = canvas.toDataURL("image/jpeg", 0.5);
+            console.log("Compression complete");
+            
+            callback(compressedImageData);
+        };
+        
+        img.src = imageData;
+    }
+    
+    // Add form submit handler with compression check
+    if (form) {
+        form.addEventListener("submit", function(event) {
+            console.log("Form submission attempted");
+            
+            // Check if photo data is too large
+            if (photoDataInput.value && photoDataInput.value.length > 1000000) { // 1MB limit
+                console.log("Photo data too large:", photoDataInput.value.length, "bytes");
+                event.preventDefault();
+                
+                // Try to compress further
+                compressImage(photoDataInput.value, function(furtherCompressedData) {
+                    console.log("Further compressed to:", furtherCompressedData.length, "bytes");
+                    photoDataInput.value = furtherCompressedData;
+                    
+                    // Check if it's still too large
+                    if (furtherCompressedData.length > 1000000) {
+                        alert("The image is still too large. Please try taking a photo with lower resolution.");
+                    } else {
+                        console.log("Compression successful, submitting form");
+                        form.submit();
+                    }
+                });
+                
+                return false;
+            }
+            
+            console.log("Form submission proceeding");
+            return true;
+        });
+    }
+    
+    // Retake photo button
+    if (retakePhotoBtn) {
+        retakePhotoBtn.addEventListener("click", function() {
+            console.log("Retake button clicked");
+            photoPreview.style.display = "none";
+            photoDataInput.value = "";
+            fileInput.click();
         });
     }
 });
