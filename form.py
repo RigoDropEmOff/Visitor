@@ -399,7 +399,40 @@ def visitor_logs():
     if not session.get("admin_authenticated"):  # Protect logs page
         return redirect(url_for("admin_login"))
 
-    visitors = Visitor.query.all()
+    visitors_query = Visitor.query.all()
+    visitors = []
+    for v in visitors_query:
+        #create a copy so we dont modify databse 
+        visitor_copy = {
+            'id': v.id,
+            'name': v.name,
+            'company_name': v.company_name,
+            'purpose': v.purpose,
+            'department': v.department,
+            'personnel': v.personnel,
+            'photo_path': v.photo_path,
+            'badge_number': v.badge_number
+        }
+
+        # Convert check-in time
+        if v.check_in_time:
+            # Assume stored time is UTC and convert to local
+            utc_time = v.check_in_time.replace(tzinfo=pytz.UTC)
+            local_time = utc_time.astimezone(LOCAL_TZ)
+            visitor_copy['check_in_time'] = local_time.strftime('%m/%d/%Y %I:%M %p')
+        else:
+            visitor_copy['check_in_time'] = 'N/A'
+            
+        # Convert check-out time
+        if v.check_out_time:
+            utc_time = v.check_out_time.replace(tzinfo=pytz.UTC)
+            local_time = utc_time.astimezone(LOCAL_TZ)
+            visitor_copy['check_out_time'] = local_time.strftime('%m/%d/%Y %I:%M %p')
+        else:
+            visitor_copy['check_out_time'] = 'Still Checked In'
+            
+        visitors.append(visitor_copy)
+        
     return render_template("visitor_logs.html", visitors=visitors)
 
 if __name__ == "__main__":
